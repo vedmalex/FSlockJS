@@ -1,17 +1,28 @@
 import { CommandNames } from './execCommand';
-const EventEmitter = require('events')
+import {EventEmitter} from 'events'
+
 export type JobProps = {
   path: string;
   command: CommandNames;
   params: any;
 }
 
-export class Job extends EventEmitter {
+export type EventListeners = {
+  event: string | symbol;
+  listener: (...args: any[]) => void;
+  type: 'on'|'once'
+}
+export class Job {
+  private emitter = new EventEmitter()
+  private listeners: Array<EventListeners> = [];
   public command: CommandNames;
   public params: any;
   public state: 'idle' | 'processing' | 'executed'| 'queued' = 'idle'
-  constructor(props: JobProps) {
-    super()
+  public path: string;
+  public result: any
+  public error: Error
+
+  constructor(props?: JobProps) {
     if (!props?.command || !props?.path) {
       throw new Error('Unexpected new job properties')
     }
@@ -22,12 +33,45 @@ export class Job extends EventEmitter {
     this.result = null
     this.error = null
   }
-  async execution() {
+
+  on(event: string | symbol, listener: (...args: any[]) => void){
+    this.emitter.on(event, listener)
+    this.listeners.push({
+      event,
+      listener,
+      type: 'on'
+    })
+  }
+
+  once(event: string | symbol, listener: (...args: any[]) => void){
+    this.emitter.once(event, listener)
+    this.listeners.push({
+      event,
+      listener,
+      type: 'once'
+    })
+  }
+
+  close(){
+    this.emit('close');
+    setTimeout(()=>{
+      this.emitter.removeAllListeners()
+    },10)
+  }
+
+  emit(event: string | symbol, ...args: any[]){
+    return this.emitter.emit(event, ...args)
+  }
+
+  async execution():Promise<Job> {
     return new Promise((resolve) => {
-      if (this.state === 'executed') return resolve(this)
-      this.once('executed', () => {
-        return resolve(this)
-      })
+      if (this.state === 'executed') {
+        resolve(this)
+      } else {
+        this.once('executed', () => {
+          resolve(this)
+        })
+      }
     })
   }
 }

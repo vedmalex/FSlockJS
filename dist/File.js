@@ -18,15 +18,16 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.File = void 0;
-const fs = __importStar(require("fs"));
-const url = __importStar(require("url"));
-const http = __importStar(require("http"));
-const https = __importStar(require("https"));
+const fs = __importStar(require("fs-extra"));
 const Directory_1 = require("./Directory");
 const CannotReadFileNotFound_1 = require("./errors/CannotReadFileNotFound");
 const pathLib = __importStar(require("path"));
+const download_1 = __importDefault(require("download"));
 function stringify(obj, options) {
     let spaces;
     let EOL = '\n';
@@ -41,131 +42,48 @@ function stringify(obj, options) {
 }
 class File {
     static async append(p, data) {
-        return new Promise((res, rej) => {
-            fs.appendFile(p, data, (err) => {
-                if (err)
-                    rej(err);
-                res(true);
-            });
-        });
+        await fs.appendFile(p, data);
+        return true;
     }
     static async appendJSON(path, data) {
-        const self = this;
-        return new Promise(async (resolve, reject) => {
-            let json;
-            if (await this.exists(path)) {
-                json = await this.read(path);
-            }
-            const res = await this.create(path, Object.assign({}, json, data));
-            resolve(res);
-        });
+        let json;
+        if (await this.exists(path)) {
+            json = await this.read(path);
+        }
+        return await this.create(path, Object.assign({}, json !== null && json !== void 0 ? json : {}, data));
     }
     static async create(path, data = '') {
-        const self = this;
-        return new Promise(async (res, rej) => {
-            await Directory_1.Directory.ensure(pathLib.dirname(path));
-            const exist = await this.exists(path);
-            const write = (resolver) => {
-                fs.writeFile(path, stringify(data), (err) => {
-                    if (err)
-                        return err;
-                    resolver(true);
-                });
-            };
-            if (exist) {
-                try {
-                    write(res);
-                }
-                catch (e) {
-                    rej(e);
-                    throw e;
-                }
+        await Directory_1.Directory.ensure(pathLib.dirname(path));
+        const exist = await this.exists(path);
+        if (exist) {
+            try {
+                await fs.writeFile(path, stringify(data));
             }
-            else
-                write(res);
-        });
+            catch (e) {
+                throw e;
+            }
+        }
+        else {
+            await fs.writeFile(path, stringify(data));
+        }
+        return true;
     }
     static async download(uri, outputPath) {
-        return new Promise((res, rej) => {
-            let store = true;
-            return new Promise(async (resolve, reject) => {
-                if (!uri)
-                    reject(new Error('Require uri'));
-                if (!outputPath)
-                    store = false;
-                if (store)
-                    await this.ensure(outputPath);
-                const timeout = 20 * 1000;
-                const { protocol } = url.parse(uri);
-                const req = protocol === 'https:' ? https : http;
-                const URL = protocol === null ? `http://${uri}` : uri;
-                const request = req
-                    .get(URL, (response) => {
-                    const { statusCode } = response;
-                    if (statusCode === 200) {
-                        if (store) {
-                            const outputFile = fs.createWriteStream(outputPath);
-                            response.pipe(outputFile);
-                            outputFile.on('finish', () => { });
-                            outputFile.on('close', () => resolve(outputPath));
-                        }
-                        else {
-                            let buff;
-                            response.on('data', (chunk) => {
-                                buff =
-                                    buff === undefined
-                                        ? Buffer.from(chunk)
-                                        : Buffer.concat([buff, chunk]);
-                            });
-                            response.on('end', () => resolve(buff));
-                        }
-                    }
-                    else if (statusCode === 303 ||
-                        statusCode === 302 ||
-                        statusCode === 301) {
-                        const newURL = response.headers.location;
-                        return resolve(this.download(newURL, outputPath));
-                    }
-                    else if (statusCode === 404) {
-                        return resolve(statusCode);
-                    }
-                    else {
-                        return resolve(statusCode);
-                    }
-                    return false;
-                });
-                request
-                    .on('error', (e) => resolve(e))
-                    .setTimeout(timeout, () => {
-                    request.abort();
-                    return resolve(504);
-                })
-                    .end();
-            })
-                .then((data) => {
-                return res(data);
-            })
-                .catch((err) => {
-                return rej(err);
-            });
-        });
+        return await this.create(outputPath, await download_1.default(uri));
     }
     static async exists(path) {
-        return new Promise((resolve, reject) => fs.stat(path, (err, stats) => {
-            if (err && err.code === 'ENOENT') {
-                return resolve(false);
+        try {
+            if (fs.pathExists(path)) {
+                const fi = await fs.stat(path);
+                return fi.isFile();
             }
-            if (err && err.code === 'ENOTDIR') {
-                return resolve(false);
+            else {
+                return false;
             }
-            if (err) {
-                return reject(err);
-            }
-            if (stats.isFile() || stats.isDirectory()) {
-                return resolve(true);
-            }
+        }
+        catch (e) {
             return false;
-        }));
+        }
     }
     static async ensure(path, data = '') {
         const exist = await this.exists(path);
@@ -176,39 +94,18 @@ class File {
         }
         return exist;
     }
-    static async read(path, options = {}) {
+    static async read(path, options) {
         const isFile = await this.exists(path);
-        if (!isFile)
+        if (isFile) {
+            return await fs.readJSON(path, options !== null && options !== void 0 ? options : undefined);
+        }
+        else {
             throw new CannotReadFileNotFound_1.CannotReadFileNotFound(`CannotReadFileNotFound({path: ${path}}`);
-        return new Promise(async (res, rej) => {
-            let output;
-            try {
-                const data = fs.readFileSync(path, options);
-                if (Buffer.isBuffer(data))
-                    output = data.toString('utf8');
-                output = output.replace(/^\uFEFF/, '');
-                let obj;
-                try {
-                    obj = JSON.parse(output, options ? options.reviver : null);
-                }
-                catch (err2) {
-                    rej(err2);
-                }
-                res(obj);
-            }
-            catch (e) {
-                rej(e);
-            }
-        });
+        }
     }
     static async remove(path) {
-        return new Promise((res, rej) => {
-            fs.unlink(path, (err) => {
-                if (err)
-                    rej(err);
-                res(true);
-            });
-        });
+        await fs.remove(path);
+        return true;
     }
 }
 exports.File = File;

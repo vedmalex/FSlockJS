@@ -14,8 +14,8 @@ export declare class FSLock {
     state: 'idle' | 'processingAll' | 'processing';
     autoExecStarted: boolean;
     options: FSLockOptions;
-    constructor(props: FSLockOptions);
-    add(command: any, path: any, params: any): Job;
+    constructor(props?: FSLockOptions);
+    add(command: any, path: any, params?: any): Job;
     get(index?: number): Job;
     processAll(): Promise<void>;
     processNext(index?: number, tries?: number): any;

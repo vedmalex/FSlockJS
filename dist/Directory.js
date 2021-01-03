@@ -20,120 +20,33 @@ var __importStar = (this && this.__importStar) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Directory = void 0;
-const fs = __importStar(require("fs"));
-const pathLib = __importStar(require("path"));
+const fs = __importStar(require("fs-extra"));
 class Directory {
     static async create(path) {
-        const self = this;
-        return new Promise((resolve, reject) => {
-            fs.mkdir(path, async (err) => {
-                if (!err || err.code === 'EEXIST') {
-                    return resolve(true);
-                }
-                if (err.code === 'ENOENT') {
-                    await self.create(pathLib.dirname(path));
-                    return resolve(self.create(path));
-                }
-                return reject(err);
-            });
-        });
+        return fs.createFile(path);
     }
     static async exists(path) {
-        return new Promise((resolve, reject) => {
-            fs.stat(path, (err, stats) => {
-                if (err && err.code === 'ENOENT') {
-                    resolve(false);
-                }
-                if (err) {
-                    reject(err);
-                }
-                if (stats.isFile() || stats.isDirectory()) {
-                    resolve(true);
-                }
-            });
-        });
+        try {
+            if (fs.pathExists(path)) {
+                const fi = await fs.stat(path);
+                return fi.isDirectory();
+            }
+            else {
+                return false;
+            }
+        }
+        catch (e) {
+            return false;
+        }
     }
     static async ensure(path) {
-        const exist = await this.exists(path);
-        if (!exist) {
-            await this.create(path);
-            return this.ensure(path);
-        }
-        return exist;
+        await fs.ensureDir(path);
     }
     static async list(path) {
-        return new Promise((resolve, reject) => {
-            fs.readdir(path, (err, list) => {
-                if (err && err.code === 'ENOENT') {
-                    reject(err);
-                }
-                if (err) {
-                    reject(err);
-                }
-                resolve(list);
-            });
-        });
+        return fs.readdir(path);
     }
     static async remove(path) {
-        const files = await this.list(path);
-        return new Promise((resolve, reject) => {
-            Promise.all(files.map(async (file) => {
-                try {
-                    const filep = pathLib.join(path, file);
-                    fs.lstat(filep, (err, stat) => {
-                        if (stat && stat.isDirectory()) {
-                            fs.rmdir(filep, async (err) => {
-                                if (err) {
-                                    if (err.message.slice(0, 30) ===
-                                        'ENOTEMPTY: directory not empty') {
-                                        resolve(await this.remove(filep));
-                                    }
-                                    if (err.message.slice(0, 33) ===
-                                        'ENOENT: no such file or directory') {
-                                        resolve(true);
-                                    }
-                                    else {
-                                        reject(err);
-                                    }
-                                }
-                                resolve(true);
-                            });
-                        }
-                        else {
-                            fs.unlink(filep, (err) => {
-                                if (err)
-                                    reject(err);
-                                resolve(true);
-                            });
-                        }
-                    });
-                }
-                catch (err) {
-                    reject(err);
-                    throw err;
-                }
-            }))
-                .then(() => {
-                fs.rmdir(path, async (err) => {
-                    if (err) {
-                        if (err.message.slice(0, 30) === 'ENOTEMPTY: directory not empty') {
-                            resolve(await this.remove(path));
-                        }
-                        else {
-                            if (err.message.slice(0, 33) ===
-                                'ENOENT: no such file or directory') {
-                                resolve(true);
-                            }
-                            reject(err);
-                        }
-                    }
-                    resolve(true);
-                });
-            })
-                .catch((err) => {
-                reject(err);
-            });
-        });
+        return fs.rmdir(path);
     }
 }
 exports.Directory = Directory;

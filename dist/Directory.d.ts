@@ -1,8 +1,8 @@
 export declare class Directory {
-    static create(path: string): Promise<unknown>;
-    static exists(path: string): Promise<unknown>;
-    static ensure(path: string): any;
+    static create(path: string): Promise<void>;
+    static exists(path: string): Promise<boolean>;
+    static ensure(path: string): Promise<void>;
     static list(path: string): Promise<Array<string>>;
-    static remove(path: string): Promise<unknown>;
+    static remove(path: string): Promise<void>;
 }
 //# sourceMappingURL=Directory.d.ts.map

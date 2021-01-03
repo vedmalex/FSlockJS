@@ -35,7 +35,7 @@ export class FSLock {
   public state: 'idle' | 'processingAll' | 'processing'
   public autoExecStarted: boolean
   public options: FSLockOptions
-  constructor(props: FSLockOptions) {
+  constructor(props?: FSLockOptions) {
     this.queue = []
     this.locks = {}
     this.options = {
@@ -49,7 +49,7 @@ export class FSLock {
       this.start()
     }
   }
-  add(command, path, params) {
+  add(command, path, params?) {
     const job = new Job({ command, path, params })
     this.queue.push(job)
     job.state = 'queued'
@@ -126,7 +126,7 @@ async processNext(index=0, tries=0) {
 };
 
 
-   start() {
+  start() {
   const self = this;
   if (!this.autoExecStarted) this.autoExecStarted = true;
 
@@ -145,7 +145,7 @@ async processNext(index=0, tries=0) {
   }
   continuouslyExecute();
 }
- stop() {
+stop() {
   if(!this.autoExecStarted) return false;
   this.autoExecStarted = false;
 }
